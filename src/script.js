@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import * as dat from 'lil-gui'
-import CANNON from 'cannon'
+import * as CANNON from 'cannon-es'
 
 THREE.ColorManagement.enabled = false
 
@@ -40,6 +40,22 @@ debugObject.createBoxes = () => {
 
 gui.add(debugObject, 'createBoxes')
 
+debugObject.reset = () =>
+{
+    for (const object of objectsToUpdate) {
+        //remove body
+        object.body.removeEventListener('collide', playHitSound)
+        world.removeBody(object.body)
+
+        //remove mesh
+        scene.remove(object.mesh)
+    }
+
+    objectsToUpdate.splice(0,objectsToUpdate.length)
+}
+
+gui.add(debugObject, 'reset')
+
 /**
  * Base
  */
@@ -48,6 +64,20 @@ const canvas = document.querySelector('canvas.webgl')
 
 // Scene
 const scene = new THREE.Scene()
+
+const hitSound = new Audio('/sounds/hit.mp3')
+
+const playHitSound = (collision) => 
+{
+    const impactStrength = collision.contact.getImpactVelocityAlongNormal()
+
+    if(impactStrength > 1.5)
+    {
+        hitSound.volume = Math.random()
+        hitSound.currentTime = 0
+        hitSound.play()
+    }
+}
 
 /**
  * Textures
@@ -67,7 +97,14 @@ const environmentMapTexture = cubeTextureLoader.load([
 //Physics
 
 //World
+
 const world = new CANNON.World()
+
+//performance optimization
+world.broadphase = new CANNON.SAPBroadphase(world) // testing object if they are colliding in a different way
+world.allowSleep = true // if an object has velocity 0 is sleeping and won't be tested
+
+
 world.gravity.set(0, -9.82, 0)
 
 const concreteMaterial = new CANNON.Material('concrete')
@@ -244,6 +281,7 @@ const createSphere = (radius, position) => {
         }
     )
     body.position.copy(position)
+    body.addEventListener('collide', playHitSound)
     world.addBody(body)
 
     //Save the object
@@ -278,6 +316,7 @@ const createBoxes = (width, height, depth, position) =>{
         shape: boxShape,        
     })
     boxBody.position.copy(position)
+    boxBody.addEventListener('collide',playHitSound)
     world.addBody(boxBody)
 
     objectsToUpdate.push({
